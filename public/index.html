@@ -120,8 +120,38 @@ button{cursor:pointer}
 .head{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
 .head h3{font-size:12px;margin:0;font-weight:800}
 .head span{font-size:8px;color:#718096}
-.chart{height:245px}
-.chart svg{width:100%;height:245px}
+.chart{
+  height:245px;
+  min-height:245px;
+  width:100%;
+  overflow:hidden;
+  position:relative;
+}
+.chart > svg{
+  display:block;
+  width:100%;
+  height:245px;
+  max-width:100%;
+  max-height:245px;
+}
+.chart .radial{
+  width:190px!important;
+  height:190px!important;
+  max-width:190px!important;
+  max-height:190px!important;
+  flex:0 0 190px;
+}
+.chart .dist-svg{
+  width:100%!important;
+  height:145px!important;
+  max-height:145px!important;
+  display:block;
+}
+.chart .chart-svg{
+  width:100%!important;
+  height:245px!important;
+  max-width:100%!important;
+}
 .axis{stroke:#2b394b;stroke-width:1}
 .bar{fill:#7181ff}
 .bar2{fill:#3bd4a1}
@@ -129,15 +159,43 @@ button{cursor:pointer}
 .point{fill:#8291ff}
 
 .ct{fill:#7d8ca1;font-size:9px}
-.chart-shell{height:245px;display:flex;align-items:center;gap:20px}
-.chart-svg{width:100%;height:245px}
-.chart-legend{display:flex;flex-direction:column;gap:9px;min-width:145px;max-height:210px;overflow:auto}
+.chart-shell{height:245px;min-height:245px;width:100%;display:flex;align-items:center;gap:18px;overflow:hidden}
+.chart-svg{width:100%;height:245px;max-width:100%;max-height:245px;display:block}
+.chart-legend{display:flex;flex-direction:column;gap:9px;min-width:135px;max-width:180px;max-height:205px;overflow:auto}
 .legend-item{display:flex;align-items:center;gap:8px;font-size:9px;color:#a9b5c7}
 .legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
 .legend-item b{margin-left:auto;color:#e7ebf3;font-size:9px}
-.profile-wrap{height:245px;display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:center}
-.radial{width:190px;height:190px}
-.profile-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.profile-wrap{
+  height:245px;
+  width:100%;
+  min-width:0;
+  display:grid;
+  grid-template-columns:205px minmax(0,1fr);
+  gap:16px;
+  align-items:center;
+  overflow:hidden;
+}
+.radial{
+  width:190px!important;
+  height:190px!important;
+  max-width:190px!important;
+  max-height:190px!important;
+}
+.profile-wrap > div{
+  min-width:0;
+  overflow:hidden;
+}
+.profile-stats{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  min-width:0;
+}
+.profile-stat{
+  min-width:0;
+  overflow:hidden;
+}
+
 .profile-stat{background:#0a111a;border:1px solid var(--line);border-radius:11px;padding:12px}
 .profile-stat label{display:block;color:#718096;font-size:8px;text-transform:uppercase;letter-spacing:.08em}
 .profile-stat b{display:block;font-size:16px;margin-top:5px}
@@ -153,6 +211,7 @@ button{cursor:pointer}
 .stat-small{fill:#7f8da1;font-size:9px}
 
 .empty{height:245px;display:grid;place-items:center;color:#68778c;font-size:10px;text-align:center;padding:20px}
+.analysis-panel{margin-bottom:12px;overflow:hidden}.analysis-panel .chart{overflow:hidden}
 
 /* Insights */
 .insights{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
@@ -237,7 +296,13 @@ button{cursor:pointer}
 .toast.err{border-color:#71313a}
 
 /* Mobile */
+
 @media(max-width:1050px){
+ .chart{overflow:hidden}
+ .profile-wrap{grid-template-columns:190px minmax(0,1fr);gap:10px}
+ .chart .radial{width:175px!important;height:175px!important;max-width:175px!important;max-height:175px!important}
+ .profile-stats{gap:7px}
+
  .kpis{grid-template-columns:repeat(3,1fr)}
  .filters{grid-template-columns:1fr 1fr}
  .grid{grid-template-columns:1fr}
@@ -298,7 +363,7 @@ button{cursor:pointer}
     <div class="panel"><div class="head"><h3 id="g1t">Primary analysis</h3><span id="g1s"></span></div><div class="chart" id="g1"></div></div>
     <div class="panel"><div class="head"><h3 id="g2t">Composition</h3><span id="g2s"></span></div><div class="chart" id="g2"></div></div>
   </div>
-  <div class="panel" style="margin-bottom:11px"><div class="head"><h3 id="g3t">Relationship / trend</h3><span id="g3s"></span></div><div class="chart" id="g3"></div></div>
+  <div class="panel analysis-panel"><div class="head"><h3 id="g3t">Relationship / trend</h3><span id="g3s"></span></div><div class="chart" id="g3"></div></div>
   <div class="panel" style="margin-bottom:11px"><div class="head"><h3>Insights</h3><span id="insightMeta"></span></div><div class="insights" id="insights"></div></div>
   <div class="panel table"><div class="table-top"><div class="head" style="margin:0"><h3>Data explorer</h3><span id="rowInfo"></span></div></div><div class="scroll"><table class="data" id="table"></table></div><div class="pager"><span id="pageInfo"></span><div><button class="btn" id="prev">Prev</button> <button class="btn" id="next">Next</button></div></div></div>
 </section>
