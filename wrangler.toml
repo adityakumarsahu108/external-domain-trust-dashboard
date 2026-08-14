@@ -9,4 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "datascope"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "5c2aec29-5d83-4672-b352-99a1a2d42a6d"
