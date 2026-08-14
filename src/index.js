@@ -59,14 +59,15 @@ export default {
       const importMatch=p==="/api/datasets/import";
       if(importMatch && request.method==="POST"){
         const body=await request.json();
-        if(!Array.isArray(body.headers)||!Array.isArray(body.types)||!Number.isInteger(body.rowCount))return json({error:"Invalid dataset metadata"},400);
+        if(!Array.isArray(body.headers)||!Number.isInteger(body.rowCount))return json({error:"Invalid dataset metadata: headers must be an array and rowCount must be an integer"},400);
+        const types=Array.isArray(body.types)?body.types:body.headers.map(h=>typeof body.types==="object"&&body.types?body.types[h]||"text":"text");
         if(body.headers.length===0)return json({error:"Dataset has no columns"},400);
         const id=crypto.randomUUID(), now=new Date().toISOString();
         const stmts=[
           env.DB.prepare(`INSERT INTO datasets(id,name,filename,row_count,column_count,is_current,created_at) VALUES(?,?,?,?,?,0,?)`)
             .bind(id,String(body.name||"Dataset"),String(body.filename||"dataset"),body.rowCount,body.headers.length,now)
         ];
-        body.headers.forEach((name,i)=>stmts.push(env.DB.prepare(`INSERT INTO dataset_columns(dataset_id,name,position,data_type) VALUES(?,?,?,?)`).bind(id,String(name),i,String(body.types[i]||"text"))));
+        body.headers.forEach((name,i)=>stmts.push(env.DB.prepare(`INSERT INTO dataset_columns(dataset_id,name,position,data_type) VALUES(?,?,?,?)`).bind(id,String(name),i,String(types[i]||"text"))));
         await env.DB.batch(stmts);
         return json({ok:true,dataset:{id,name:body.name,rows:body.rowCount,columns:body.headers.length}},201);
       }

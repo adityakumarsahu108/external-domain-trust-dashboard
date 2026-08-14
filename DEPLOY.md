@@ -28,3 +28,7 @@ The Worker name intentionally matches the connected Cloudflare Worker name `exte
 
 ## D1 model
 D1 stores dataset metadata, dynamic column definitions, and each row as JSON. The original binary Excel/CSV file is not stored in D1.
+
+
+## Existing D1 database
+If dataset_rows was created by an older version and lacks row_number, run migrate_existing_d1.sql once. If the database contains only test data, recreating it from schema.sql is simpler.
