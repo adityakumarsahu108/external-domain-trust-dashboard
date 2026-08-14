@@ -127,7 +127,31 @@ button{cursor:pointer}
 .bar2{fill:#3bd4a1}
 .line{fill:none;stroke:#8291ff;stroke-width:2.6}
 .point{fill:#8291ff}
+
 .ct{fill:#7d8ca1;font-size:9px}
+.chart-shell{height:245px;display:flex;align-items:center;gap:20px}
+.chart-svg{width:100%;height:245px}
+.chart-legend{display:flex;flex-direction:column;gap:9px;min-width:145px;max-height:210px;overflow:auto}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:9px;color:#a9b5c7}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+.legend-item b{margin-left:auto;color:#e7ebf3;font-size:9px}
+.profile-wrap{height:245px;display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:center}
+.radial{width:190px;height:190px}
+.profile-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.profile-stat{background:#0a111a;border:1px solid var(--line);border-radius:11px;padding:12px}
+.profile-stat label{display:block;color:#718096;font-size:8px;text-transform:uppercase;letter-spacing:.08em}
+.profile-stat b{display:block;font-size:16px;margin-top:5px}
+.profile-stat span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
+.dist-svg{width:100%;height:245px}
+.dist-area{fill:rgba(113,129,255,.16);stroke:#8291ff;stroke-width:2.4}
+.gridline{stroke:#1e2b3b;stroke-width:1}
+.scatter-point{fill:#8391ff;opacity:.5}
+.scatter-point:hover{opacity:1}
+.regression{stroke:#4fd2a1;stroke-width:2;stroke-dasharray:6 5;fill:none}
+.axis-label{fill:#718096;font-size:8px}
+.stat-big{fill:#f3f6fb;font-size:22px;font-weight:800}
+.stat-small{fill:#7f8da1;font-size:9px}
+
 .empty{height:245px;display:grid;place-items:center;color:#68778c;font-size:10px;text-align:center;padding:20px}
 
 /* Insights */
@@ -320,11 +344,188 @@ function apply(){const q=$('search').value.toLowerCase(),c=$('cat').value,v=$('v
 function render(){metrics();graphs();insights();renderTable();$('exportBtn').disabled=!F.length}
 function metrics(){const miss=R.reduce((s,r)=>s+r.filter(v=>!cl(v)).length,0),cells=R.length*H.length;const a=[['Rows',nf(F.length),'filtered result'],['Fields',nf(H.length),'source columns'],['Numeric',nf(nums().length),'quantitative fields'],['Categories',nf(cats().length),'groupable fields'],['Completeness',cells?((1-miss/cells)*100).toFixed(1)+'%':'—','non-blank cells']];$('kpis').innerHTML=a.map(x=>`<div class="kpi"><label>${x[0]}</label><strong>${x[1]}</strong><span>${x[2]}</span></div>`).join('')}
 function wrap(g){return `<svg viewBox="0 0 720 245" preserveAspectRatio="none">${g}</svg>`}
-function bars(){const n=nums()[0],c=cats()[0];if(!n||!c)return null;const ni=H.indexOf(n),ci=H.indexOf(c),m={};F.forEach(x=>{const k=cl(x.r[ci])||'Blank',v=Number(String(x.r[ni]).replace(/,/g,''));if(Number.isFinite(v))m[k]=(m[k]||0)+v});const d=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,9),mx=d[0]?.[1]||1;return wrap(d.map((x,i)=>{const y=15+i*23,w=x[1]/mx*440;return`<text class="ct" x="4" y="${y+10}">${esc(x[0].slice(0,25))}</text><rect class="bar" x="175" y="${y}" width="${w}" height="14" rx="7"/><text class="ct" x="${180+w}" y="${y+10}">${nf(x[1])}</text>`}).join(''))}
-function hist(){const n=nums()[0];if(!n)return null;const i=H.indexOf(n),a=F.map(x=>Number(String(x.r[i]).replace(/,/g,''))).filter(Number.isFinite);if(!a.length)return null;const mn=Math.min(...a),mx=Math.max(...a),span=mx-mn||1,b=8,c=Array(b).fill(0);a.forEach(v=>c[Math.min(b-1,Math.floor((v-mn)/span*b))]++);const bw=570/b,mc=Math.max(...c),g=['<line class="axis" x1="60" y1="220" x2="670" y2="220"/>'];c.forEach((v,j)=>{const h=v/mc*175,x=65+j*bw;g.push(`<rect class="bar" x="${x}" y="${220-h}" width="${bw-8}" height="${h}" rx="5"/><text class="ct" x="${x}" y="239">${nf(mn+span*j/b)}</text>`) });return wrap(g.join(''))}
-function trend(){const d=dates()[0],n=nums()[0];if(!d||!n)return null;const di=H.indexOf(d),ni=H.indexOf(n),m={};F.forEach(x=>{const dt=new Date(x.r[di]),v=Number(String(x.r[ni]).replace(/,/g,''));if(!isNaN(dt)&&Number.isFinite(v)){const k=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');m[k]=(m[k]||0)+v}});const a=Object.entries(m).sort((x,y)=>x[0].localeCompare(y[0])).slice(-18);if(a.length<2)return null;const mx=Math.max(...a.map(x=>x[1])),mn=Math.min(...a.map(x=>x[1])),pts=a.map((x,i)=>[55+i*610/(a.length-1),215-(x[1]-mn)/(mx-mn||1)*180,x[0]]),path=pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');return wrap('<line class="axis" x1="55" y1="215" x2="665" y2="215"/><path class="line" d="'+path+'"/>'+pts.map(p=>`<circle class="point" cx="${p[0]}" cy="${p[1]}" r="3"/><text class="ct" x="${p[0]}" y="239" text-anchor="middle">${p[2]}</text>`).join(''))}
-function scatter(){const n=nums();if(n.length<2)return null;const xi=H.indexOf(n[0]),yi=H.indexOf(n[1]),a=F.map(x=>[Number(String(x.r[xi]).replace(/,/g,'')),Number(String(x.r[yi]).replace(/,/g,''))]).filter(p=>p.every(Number.isFinite)).slice(0,600);if(!a.length)return null;const xmin=Math.min(...a.map(p=>p[0])),xmax=Math.max(...a.map(p=>p[0])),ymin=Math.min(...a.map(p=>p[1])),ymax=Math.max(...a.map(p=>p[1]));return wrap('<line class="axis" x1="55" y1="215" x2="670" y2="215"/><line class="axis" x1="55" y1="35" x2="55" y2="215"/>'+a.map(p=>`<circle class="point" cx="${55+(p[0]-xmin)/(xmax-xmin||1)*610}" cy="${215-(p[1]-ymin)/(ymax-ymin||1)*180}" r="3" opacity=".55"/>`).join('')+`<text class="ct" x="55" y="240">${esc(n[0])}</text><text class="ct" x="665" y="240" text-anchor="end">${esc(n[1])}</text>`)}
-function graphs(){const t=trend(),b=bars(),h=hist(),s=scatter();$('g1t').textContent=t?'Trend over time':b?'Top categories by numeric measure':'Numeric distribution';$('g1s').textContent='Automatic';$('g1').innerHTML=t||b||h||'<div class="empty">Not enough structured data for a meaningful chart.</div>';$('g2t').textContent=b?'Category composition':'Numeric distribution';$('g2s').textContent='Automatic';$('g2').innerHTML=b||h||'<div class="empty">No suitable fields detected.</div>';$('g3t').textContent=s?'Numeric relationship':t?'Trend over time':'Primary measure';$('g3s').textContent='Automatic';$('g3').innerHTML=s||t||b||'<div class="empty">Not enough structured data.</div>'}
+
+const CHART_COLORS=['#7181ff','#45d3a4','#55c9ff','#f2bd58','#d77cff','#ff7188','#6bc6ff','#a8b5ff'];
+
+function numericValues(h){
+  const i=H.indexOf(h);
+  return F.map(x=>Number(String(x.r[i]).replace(/,/g,''))).filter(Number.isFinite);
+}
+
+function donut(){
+  const n=nums()[0],c=cats()[0];
+  if(!c)return null;
+  const ci=H.indexOf(c),ni=n?H.indexOf(n):-1,m={};
+  F.forEach(x=>{
+    const k=cl(x.r[ci])||'Blank';
+    if(n){
+      const v=Number(String(x.r[ni]).replace(/,/g,''));
+      if(Number.isFinite(v))m[k]=(m[k]||0)+v;
+    }else m[k]=(m[k]||0)+1;
+  });
+  const d=Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,7);
+  if(!d.length)return null;
+  const total=d.reduce((s,x)=>s+x[1],0),cx=150,cy=122,r=72,ri=47;
+  let angle=-Math.PI/2;
+  const paths=[];
+  d.forEach((x,i)=>{
+    const a=(x[1]/total)*Math.PI*2;
+    const end=angle+a;
+    const large=a>Math.PI?1:0;
+    const p1=[cx+r*Math.cos(angle),cy+r*Math.sin(angle)];
+    const p2=[cx+r*Math.cos(end),cy+r*Math.sin(end)];
+    const q1=[cx+ri*Math.cos(end),cy+ri*Math.sin(end)];
+    const q2=[cx+ri*Math.cos(angle),cy+ri*Math.sin(angle)];
+    paths.push(`<path d="M ${p1[0]} ${p1[1]} A ${r} ${r} 0 ${large} 1 ${p2[0]} ${p2[1]} L ${q1[0]} ${q1[1]} A ${ri} ${ri} 0 ${large} 0 ${q2[0]} ${q2[1]} Z" fill="${CHART_COLORS[i%CHART_COLORS.length]}"/>`);
+    angle=end;
+  });
+  const legend=d.map((x,i)=>`<div class="legend-item"><i class="legend-dot" style="background:${CHART_COLORS[i%CHART_COLORS.length]}"></i><span title="${esc(x[0])}">${esc(x[0].slice(0,24))}</span><b>${nf(x[1])}</b></div>`).join('');
+  return `<div class="chart-shell"><svg class="chart-svg" viewBox="0 0 300 245">
+    ${paths.join('')}
+    <circle cx="${cx}" cy="${cy}" r="${ri-1}" fill="#0d141f"/>
+    <text x="${cx}" y="${cy-2}" text-anchor="middle" class="stat-big">${nf(total)}</text>
+    <text x="${cx}" y="${cy+15}" text-anchor="middle" class="stat-small">${n?'total value':'records'}</text>
+  </svg><div class="chart-legend">${legend}</div></div>`;
+}
+
+function metricProfile(){
+  const n=nums()[0];
+  if(!n)return null;
+  const a=numericValues(n);
+  if(!a.length)return null;
+  const sum=a.reduce((x,y)=>x+y,0),avg=sum/a.length,min=Math.min(...a),max=Math.max(...a);
+  const completeness=R.length?((a.length/R.length)*100):0;
+  const radius=72,circ=2*Math.PI*radius,dash=circ*(completeness/100);
+  const recent=a.slice(-24);
+  const mn2=Math.min(...recent),mx2=Math.max(...recent),span=mx2-mn2||1;
+  const pts=recent.map((v,i)=>`${28+i*(154/Math.max(1,recent.length-1))},${190-(v-mn2)/span*75}`).join(' ');
+  return `<div class="profile-wrap">
+    <svg class="radial" viewBox="0 0 190 190">
+      <circle cx="95" cy="95" r="${radius}" fill="none" stroke="#1d2a3a" stroke-width="14"/>
+      <circle cx="95" cy="95" r="${radius}" fill="none" stroke="#7181ff" stroke-width="14" stroke-linecap="round"
+        stroke-dasharray="${dash} ${circ}" transform="rotate(-90 95 95)"/>
+      <text x="95" y="91" text-anchor="middle" class="stat-big">${Math.round(completeness)}%</text>
+      <text x="95" y="109" text-anchor="middle" class="stat-small">numeric coverage</text>
+    </svg>
+    <div>
+      <div style="font-size:9px;color:#718096;text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px">${esc(n)}</div>
+      <svg class="dist-svg" viewBox="0 0 210 210">
+        <line class="gridline" x1="20" y1="190" x2="195" y2="190"/>
+        <polyline points="${pts}" fill="none" stroke="#55c9ff" stroke-width="2.2"/>
+        ${recent.map((v,i)=>`<circle cx="${28+i*(154/Math.max(1,recent.length-1))}" cy="${190-(v-mn2)/span*75}" r="2.4" fill="#55c9ff"/>`).join('')}
+      </svg>
+      <div class="profile-stats">
+        <div class="profile-stat"><label>Average</label><b>${nf(Math.round(avg))}</b><span>mean value</span></div>
+        <div class="profile-stat"><label>Total</label><b>${nf(Math.round(sum))}</b><span>sum of values</span></div>
+        <div class="profile-stat"><label>Minimum</label><b>${nf(min)}</b><span>lowest value</span></div>
+        <div class="profile-stat"><label>Maximum</label><b>${nf(max)}</b><span>highest value</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function distribution(){
+  const n=nums()[0];
+  if(!n)return null;
+  const a=numericValues(n);
+  if(!a.length)return null;
+  const mn=Math.min(...a),mx=Math.max(...a),span=mx-mn||1,b=12,counts=Array(b).fill(0);
+  a.forEach(v=>counts[Math.min(b-1,Math.floor(((v-mn)/span)*b))]++);
+  const mc=Math.max(...counts),pts=[];
+  counts.forEach((v,i)=>{
+    const x=25+i*(650/(b-1)),y=205-(v/mc)*155;
+    pts.push([x,y]);
+  });
+  const path=`M 25 205 ${pts.map(p=>`L ${p[0]} ${p[1]}`).join(' ')} L 675 205 Z`;
+  return `<svg class="dist-svg" viewBox="0 0 700 245">
+    <line class="gridline" x1="25" y1="50" x2="675" y2="50"/>
+    <line class="gridline" x1="25" y1="128" x2="675" y2="128"/>
+    <line class="gridline" x1="25" y1="205" x2="675" y2="205"/>
+    <path class="dist-area" d="${path}"/>
+    ${pts.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#8291ff"/><text class="ct" x="${p[0]}" y="222" text-anchor="middle">${esc(nf(mn+(span*i/(b-1))).replace('.00',''))}</text>`).join('')}
+    <text class="axis-label" x="25" y="17">${esc(n)} distribution · ${nf(a.length)} numeric records</text>
+  </svg>`;
+}
+
+function trend(){
+  const d=dates()[0],n=nums()[0];
+  if(!d||!n)return null;
+  const di=H.indexOf(d),ni=H.indexOf(n),m={};
+  F.forEach(x=>{
+    const dt=new Date(x.r[di]),v=Number(String(x.r[ni]).replace(/,/g,''));
+    if(!isNaN(dt)&&Number.isFinite(v)){
+      const k=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+      m[k]=(m[k]||0)+v;
+    }
+  });
+  const a=Object.entries(m).sort((x,y)=>x[0].localeCompare(y[0])).slice(-18);
+  if(a.length<2)return null;
+  const mx=Math.max(...a.map(x=>x[1])),mn=Math.min(...a.map(x=>x[1])),span=mx-mn||1;
+  const pts=a.map((x,i)=>[35+i*630/(a.length-1),190-(x[1]-mn)/span*145,x]);
+  const area=`M ${pts[0][0]} 190 ${pts.map(p=>`L ${p[0]} ${p[1]}`).join(' ')} L ${pts.at(-1)[0]} 190 Z`;
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  return `<svg class="chart-svg" viewBox="0 0 700 245">
+    <line class="gridline" x1="35" y1="45" x2="665" y2="45"/><line class="gridline" x1="35" y1="117" x2="665" y2="117"/><line class="gridline" x1="35" y1="190" x2="665" y2="190"/>
+    <path d="${area}" fill="rgba(113,129,255,.12)"/>
+    <path d="${line}" class="line"/>
+    ${pts.map(p=>`<circle class="point" cx="${p[0]}" cy="${p[1]}" r="4"/><text class="ct" x="${p[0]}" y="210" text-anchor="middle">${p[2][0]}</text>`).join('')}
+    <text class="axis-label" x="35" y="18">${esc(n)} by month</text>
+  </svg>`;
+}
+
+function scatter(){
+  const n=nums();
+  if(n.length<2)return null;
+  const xi=H.indexOf(n[0]),yi=H.indexOf(n[1]);
+  const a=F.map(x=>[Number(String(x.r[xi]).replace(/,/g,'')),Number(String(x.r[yi]).replace(/,/g,''))])
+    .filter(p=>p.every(Number.isFinite)).slice(0,700);
+  if(a.length<2)return null;
+  const xmin=Math.min(...a.map(p=>p[0])),xmax=Math.max(...a.map(p=>p[0]));
+  const ymin=Math.min(...a.map(p=>p[1])),ymax=Math.max(...a.map(p=>p[1]));
+  const sx=v=>35+(v-xmin)/(xmax-xmin||1)*630;
+  const sy=v=>190-(v-ymin)/(ymax-ymin||1)*145;
+
+  // Least-squares regression.
+  const ax=a.map(p=>p[0]),ay=a.map(p=>p[1]);
+  const am=ax.reduce((s,v)=>s+v,0)/ax.length, bm=ay.reduce((s,v)=>s+v,0)/ay.length;
+  const slope=ax.reduce((s,v,i)=>s+(v-am)*(ay[i]-bm),0)/(ax.reduce((s,v)=>s+(v-am)**2,0)||1);
+  const intercept=bm-slope*am;
+  const r1=[xmin,slope*xmin+intercept],r2=[xmax,slope*xmax+intercept];
+  const corrDen=Math.sqrt(ax.reduce((s,v)=>s+(v-am)**2,0)*ay.reduce((s,v)=>s+(v-bm)**2,0))||1;
+  const corr=ax.reduce((s,v,i)=>s+(v-am)*(ay[i]-bm),0)/corrDen;
+
+  return `<svg class="chart-svg" viewBox="0 0 700 245">
+    <line class="gridline" x1="35" y1="45" x2="665" y2="45"/><line class="gridline" x1="35" y1="117" x2="665" y2="117"/><line class="gridline" x1="35" y1="190" x2="665" y2="190"/>
+    <line class="gridline" x1="35" y1="45" x2="35" y2="190"/>
+    <path class="regression" d="M ${sx(r1[0])} ${sy(r1[1])} L ${sx(r2[0])} ${sy(r2[1])}"/>
+    ${a.map(p=>`<circle class="scatter-point" cx="${sx(p[0])}" cy="${sy(p[1])}" r="4"><title>${esc(n[0])}: ${nf(p[0])} · ${esc(n[1])}: ${nf(p[1])}</title></circle>`).join('')}
+    <text class="axis-label" x="35" y="211">${esc(n[0])}</text>
+    <text class="axis-label" x="665" y="211" text-anchor="end">${esc(n[1])}</text>
+    <text class="axis-label" x="665" y="18" text-anchor="end">Correlation ${corr.toFixed(2)}</text>
+  </svg>`;
+}
+
+function graphs(){
+  const t=trend(),d=donut(),m=metricProfile(),dist=distribution(),s=scatter();
+
+  if(t){
+    $('g1t').textContent='Trend & volume';
+    $('g1s').textContent='Time series';
+    $('g1').innerHTML=t;
+  }else{
+    $('g1t').textContent=d?'Composition overview':'Dataset pulse';
+    $('g1s').textContent=d?'Top groups':'Numeric profile';
+    $('g1').innerHTML=d||m||'<div class="empty">Not enough structured data.</div>';
+  }
+
+  $('g2t').textContent=m?'Metric profile':d?'Category mix':'Distribution';
+  $('g2s').textContent=m?'Automatic':'Automatic';
+  $('g2').innerHTML=m||d||dist||'<div class="empty">No suitable fields detected.</div>';
+
+  $('g3t').textContent=s?'Numeric relationship':t?'Trend over time':'Value distribution';
+  $('g3s').textContent=s?'Correlation':'Automatic';
+  $('g3').innerHTML=s||t||dist||m||'<div class="empty">Not enough structured data.</div>';
+}
 function insights(){const nc=nums(),cc=cats(),miss=R.reduce((s,r)=>s+r.filter(v=>!cl(v)).length,0),cells=R.length*H.length,top=cc.map(h=>[h,new Set(R.map(r=>cl(r[H.indexOf(h)])).filter(Boolean)).size]).sort((a,b)=>b[1]-a[1])[0],avg=nc.map(h=>{const a=R.map(r=>Number(String(r[H.indexOf(h)]).replace(/,/g,''))).filter(Number.isFinite);return[h,a.length?a.reduce((x,y)=>x+y,0)/a.length:null]}).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1])[0],a=[['Filtered rows',nf(F.length),'current result'],['Completeness',cells?((1-miss/cells)*100).toFixed(1)+'%':'—','non-blank cells'],['Most varied field',top?top[0]:'—',top?nf(top[1])+' unique values':'—'],['Largest average',avg?avg[0]:'—',avg?nf(Math.round(avg[1])):'—']];$('insights').innerHTML=a.map(x=>`<div class="insight"><b>${esc(x[1])}</b><span>${esc(x[0])} · ${esc(x[2])}</span></div>`).join('');$('insightMeta').textContent=`${H.length} fields analyzed`}
 function renderTable(){const s=Number($('size').value),st=(page-1)*s,en=Math.min(st+s,F.length),cols=H.slice(0,18);$('table').innerHTML='<thead><tr>'+cols.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr></thead><tbody>'+F.slice(st,en).map(x=>'<tr>'+cols.map((h,i)=>`<td data-r="${x.i}">${esc(x.r[i])}</td>`).join('')+'</tr>').join('')+'</tbody>';$('rowInfo').textContent=`${nf(F.length)} matching rows`;$('pageInfo').textContent=`${F.length?st+1:0}–${en} of ${nf(F.length)}`;$('prev').disabled=page<=1;$('next').disabled=en>=F.length;document.querySelectorAll('[data-r]').forEach(e=>e.onclick=()=>showDetail(+e.dataset.r))}
 function showDetail(i){$('detailTitle').textContent=cl(R[i][0])||'Row details';$('detail').innerHTML=H.map((h,j)=>`<div class="kv"><label>${esc(h)}</label><b>${esc(R[i][j]||'—')}</b></div>`).join('');$('detailModal').classList.remove('hidden')}
