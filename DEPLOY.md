@@ -1,41 +1,30 @@
-# DataScope Cloudflare D1 Deployment
+# DataScope V4 — Cloudflare D1
 
-## 1. Create D1
-```bash
-npx wrangler d1 create datascope
-```
+## What was fixed
+- One import control in the header.
+- The large landing panel is a drag/drop target, not another file picker.
+- CSV + XLSX + XLS are parsed in the browser.
+- No JavaScript alert boxes for normal upload errors.
+- Upload flow: select file -> preview -> Replace current dataset.
+- Previous datasets remain in D1 history.
+- New dataset automatically becomes current after publishing.
+- Dashboard reads the current dataset from D1.
+- Three graphs only.
+- Dynamic schema; no fixed Cyera field names.
 
-Copy the returned `database_id` into `wrangler.toml`.
+## Excel parser
+The UI uses the official SheetJS standalone browser build 0.20.3 from the SheetJS CDN. For a strict offline/air-gapped deployment, vendor `xlsx.full.min.js` into `public/` and change the script tag to `/xlsx.full.min.js`.
 
-## 2. Initialize schema
-```bash
-npx wrangler d1 execute datascope --file=./schema.sql --remote
-```
+## Deploy
+1. Commit and push this directory.
+2. Cloudflare Workers Builds:
+   - deploy command: `npx wrangler deploy`
+   - root directory: repository root containing `wrangler.toml`
+3. Initialize D1 once:
+   `npx wrangler d1 execute datascope --remote --file=./schema.sql`
+4. Redeploy.
 
-## 3. Put the frontend in public/
-Copy `index.html` to `public/index.html`.
+The Worker name intentionally matches the connected Cloudflare Worker name `external-domain-trust-dashboard`, removing the previous CI name mismatch warning.
 
-## 4. Deploy
-```bash
-npx wrangler deploy
-```
-
-## 5. Dataset lifecycle
-The intended production flow is:
-Upload -> validate -> normalize -> insert new dataset -> mark it current.
-The previous dataset remains in D1 as history.
-
-## Important D1 design
-The original Excel/CSV binary is NOT stored in D1. D1 stores:
-- dataset metadata
-- column definitions
-- each row as JSON
-
-This is what allows arbitrary schemas without changing SQL columns.
-
-For large datasets, use batched inserts and consider a Worker ingestion job/queue. D1 is a database, not an object store.
-
-## Excel
-The Worker endpoint is prepared for multipart uploads but the included Worker intentionally does not embed a third-party XLSX parser. For a fully self-contained Excel production build, vendor a Worker-compatible XLSX parser in `src/` and implement `parseSpreadsheet()` before enabling `.xlsx` ingestion.
-
-The browser/static preview currently supports CSV directly.
+## D1 model
+D1 stores dataset metadata, dynamic column definitions, and each row as JSON. The original binary Excel/CSV file is not stored in D1.

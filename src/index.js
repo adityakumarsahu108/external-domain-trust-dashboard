@@ -1,159 +1,79 @@
-/**
- * DataScope Cloudflare Worker + D1
- *
- * Endpoints:
- * GET  /api/health
- * GET  /api/datasets
- * GET  /api/datasets/:id
- * POST /api/datasets/import  (multipart/form-data, file=<CSV/XLSX>)
- * POST /api/datasets/:id/current
- * DELETE /api/datasets/:id
- *
- * Excel parsing is intentionally delegated to the browser/Worker-compatible
- * XLSX parser in production. Set XLSX_PARSER_URL to a vendored bundle or
- * replace parseSpreadsheet() with your preferred Worker-safe parser.
- *
- * The generic data model stores each dataset row as JSON in D1, while
- * dataset_columns stores schema/type metadata. This keeps arbitrary CSV
- * structures supported without adding a new SQL column for every export.
- */
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const path = url.pathname;
-
+    const p = url.pathname;
     try {
-      if (request.method === "GET" && path === "/api/health") {
-        return json({ ok: true, service: "datascope", storage: "cloudflare-d1" });
+      if (p === "/api/health" && request.method === "GET") return json({ok:true,service:"datascope",storage:"d1"});
+
+      if (p === "/api/datasets" && request.method === "GET") {
+        const r = await env.DB.prepare(`SELECT id,name,filename,row_count,column_count,is_current,created_at FROM datasets ORDER BY created_at DESC`).all();
+        return json({datasets:r.results});
       }
 
-      if (request.method === "GET" && path === "/api/datasets") {
-        const result = await env.DB.prepare(`
-          SELECT id, name, filename, row_count, column_count, is_current, created_at
-          FROM datasets ORDER BY created_at DESC
-        `).all();
-        return json({ datasets: result.results });
+      if (p === "/api/datasets/current" && request.method === "GET") {
+        const d = await env.DB.prepare(`SELECT * FROM datasets WHERE is_current=1 ORDER BY created_at DESC LIMIT 1`).first();
+        if (!d) return json({error:"No current dataset"},404);
+        const cols = await env.DB.prepare(`SELECT name,position,data_type FROM dataset_columns WHERE dataset_id=? ORDER BY position`).bind(d.id).all();
+        const rows = await env.DB.prepare(`SELECT row_json FROM dataset_rows WHERE dataset_id=? ORDER BY row_number`).bind(d.id).all();
+        return json({dataset:d,columns:cols.results,rows:rows.results});
       }
 
-      const m = path.match(/^\/api\/datasets\/([^/]+)$/);
-      if (request.method === "GET" && m) {
-        const id = m[1];
-        const ds = await env.DB.prepare(`SELECT * FROM datasets WHERE id=?`).bind(id).first();
-        if (!ds) return json({ error: "Dataset not found" }, 404);
-        const cols = await env.DB.prepare(`SELECT * FROM dataset_columns WHERE dataset_id=? ORDER BY position`).bind(id).all();
-        return json({ dataset: ds, columns: cols.results });
+      const rowsMatch = p.match(/^\/api\/datasets\/([^/]+)\/rows$/);
+      if (rowsMatch && request.method === "POST") {
+        const id=rowsMatch[1], body=await request.json();
+        const exists=await env.DB.prepare(`SELECT id FROM datasets WHERE id=?`).bind(id).first();
+        if(!exists) return json({error:"Dataset not found"},404);
+        const rows=Array.isArray(body.rows)?body.rows:[];
+        if(!rows.length) return json({ok:true,inserted:0});
+        const current=await env.DB.prepare(`SELECT COALESCE(MAX(row_number),0) n FROM dataset_rows WHERE dataset_id=?`).bind(id).first();
+        let n=Number(current?.n||0);
+        const stmts=rows.map(row=>env.DB.prepare(`INSERT INTO dataset_rows(id,dataset_id,row_number,row_json) VALUES(?,?,?,?)`).bind(crypto.randomUUID(),id,++n,JSON.stringify(row)));
+        for(let i=0;i<stmts.length;i+=80) await env.DB.batch(stmts.slice(i,i+80));
+        return json({ok:true,inserted:rows.length});
       }
 
-      if (request.method === "POST" && path === "/api/datasets/import") {
-        const form = await request.formData();
-        const file = form.get("file");
-        if (!(file instanceof File)) return json({ error: "file is required" }, 400);
-
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const text = file.name.toLowerCase().endsWith(".csv") ? new TextDecoder().decode(bytes) : null;
-        if (text === null) {
-          return json({
-            error: "Excel upload endpoint is present, but XLSX parsing must be enabled in the Worker build.",
-            hint: "Use a vendored Worker-compatible XLSX parser or convert the workbook to CSV before import."
-          }, 501);
-        }
-
-        const parsed = parseCSV(text);
-        if (parsed.headers.length === 0) return json({ error: "No CSV header detected" }, 400);
-
-        const id = crypto.randomUUID();
-        const now = new Date().toISOString();
-
-        await env.DB.batch([
-          env.DB.prepare(`UPDATE datasets SET is_current=0 WHERE is_current=1`),
-          env.DB.prepare(`INSERT INTO datasets(id,name,filename,row_count,column_count,is_current,created_at)
-                          VALUES(?,?,?,?,?,?,?)`)
-            .bind(id, file.name.replace(/\.[^.]+$/, ""), file.name, parsed.rows.length, parsed.headers.length, 1, now)
-        ]);
-
-        const stmts = [];
-        parsed.headers.forEach((name, position) => {
-          stmts.push(env.DB.prepare(`INSERT INTO dataset_columns(dataset_id,name,position,data_type)
-                                     VALUES(?,?,?,?)`).bind(id, name, position, inferType(parsed.rows, position)));
-        });
-        for (const row of parsed.rows) {
-          stmts.push(env.DB.prepare(`INSERT INTO dataset_rows(id,dataset_id,row_json) VALUES(?,?,?)`)
-            .bind(crypto.randomUUID(), id, JSON.stringify(row)));
-        }
-
-        // D1 batch supports bounded batches; keep each call comfortably below the limit.
-        for (let i = 0; i < stmts.length; i += 80) await env.DB.batch(stmts.slice(i, i + 80));
-
-        return json({ ok: true, dataset: { id, name: file.name, rows: parsed.rows.length, columns: parsed.headers.length } }, 201);
-      }
-
-      if (request.method === "POST" && m && path.endsWith("/current")) {
-        const id = m[1];
-        const exists = await env.DB.prepare(`SELECT id FROM datasets WHERE id=?`).bind(id).first();
-        if (!exists) return json({ error: "Dataset not found" }, 404);
+      const publishMatch=p.match(/^\/api\/datasets\/([^/]+)\/publish$/);
+      if(publishMatch && request.method==="POST"){
+        const id=publishMatch[1];
+        const d=await env.DB.prepare(`SELECT id FROM datasets WHERE id=?`).bind(id).first();
+        if(!d)return json({error:"Dataset not found"},404);
         await env.DB.batch([
           env.DB.prepare(`UPDATE datasets SET is_current=0 WHERE is_current=1`),
           env.DB.prepare(`UPDATE datasets SET is_current=1 WHERE id=?`).bind(id)
         ]);
-        return json({ ok: true, current: id });
+        return json({ok:true,current:id});
       }
 
-      if (request.method === "DELETE" && m) {
-        const id = m[1];
+      const currentMatch=p.match(/^\/api\/datasets\/([^/]+)\/current$/);
+      if(currentMatch && request.method==="POST"){
+        const id=currentMatch[1];
+        const d=await env.DB.prepare(`SELECT id FROM datasets WHERE id=?`).bind(id).first();
+        if(!d)return json({error:"Dataset not found"},404);
         await env.DB.batch([
-          env.DB.prepare(`DELETE FROM dataset_rows WHERE dataset_id=?`).bind(id),
-          env.DB.prepare(`DELETE FROM dataset_columns WHERE dataset_id=?`).bind(id),
-          env.DB.prepare(`DELETE FROM datasets WHERE id=?`).bind(id)
+          env.DB.prepare(`UPDATE datasets SET is_current=0 WHERE is_current=1`),
+          env.DB.prepare(`UPDATE datasets SET is_current=1 WHERE id=?`).bind(id)
         ]);
-        return json({ ok: true });
+        return json({ok:true,current:id});
       }
 
-      // Static assets from the Pages/Worker assets binding.
+      const importMatch=p==="/api/datasets/import";
+      if(importMatch && request.method==="POST"){
+        const body=await request.json();
+        if(!Array.isArray(body.headers)||!Array.isArray(body.types)||!Number.isInteger(body.rowCount))return json({error:"Invalid dataset metadata"},400);
+        if(body.headers.length===0)return json({error:"Dataset has no columns"},400);
+        const id=crypto.randomUUID(), now=new Date().toISOString();
+        const stmts=[
+          env.DB.prepare(`INSERT INTO datasets(id,name,filename,row_count,column_count,is_current,created_at) VALUES(?,?,?,?,?,0,?)`)
+            .bind(id,String(body.name||"Dataset"),String(body.filename||"dataset"),body.rowCount,body.headers.length,now)
+        ];
+        body.headers.forEach((name,i)=>stmts.push(env.DB.prepare(`INSERT INTO dataset_columns(dataset_id,name,position,data_type) VALUES(?,?,?,?)`).bind(id,String(name),i,String(body.types[i]||"text"))));
+        await env.DB.batch(stmts);
+        return json({ok:true,dataset:{id,name:body.name,rows:body.rowCount,columns:body.headers.length}},201);
+      }
+
       if (env.ASSETS) return env.ASSETS.fetch(request);
-      return new Response("Not found", { status: 404 });
-    } catch (err) {
-      return json({ error: err.message || String(err) }, 500);
-    }
+      return new Response("Not found",{status:404});
+    } catch(e) { return json({error:e?.message||String(e)},500); }
   }
 };
-
-function json(data, status=200) {
-  return new Response(JSON.stringify(data), {
-    status, headers: { "content-type": "application/json; charset=utf-8" }
-  });
-}
-
-function parseCSV(text) {
-  const d = detectDelimiter(text);
-  const out=[], row=[]; let r=[], c="", quoted=false;
-  for (let i=0;i<text.length;i++) {
-    const ch=text[i], nx=text[i+1];
-    if (quoted) {
-      if (ch === '"' && nx === '"') { c += '"'; i++; }
-      else if (ch === '"') quoted=false;
-      else c += ch;
-    } else if (ch === '"') quoted=true;
-    else if (ch === d) { r.push(c); c=""; }
-    else if (ch === "\n") { r.push(c); out.push(r); r=[]; c=""; }
-    else if (ch !== "\r") c += ch;
-  }
-  if (c || r.length) { r.push(c); out.push(r); }
-  const clean=out.filter(x=>x.some(v=>String(v??"").trim()!==""));
-  const headers=(clean.shift()||[]).map((x,i)=>String(x||`Column ${i+1}`).trim());
-  return {headers, rows:clean.map(x=>headers.map((_,i)=>x[i]??""))};
-}
-function detectDelimiter(text) {
-  const line=(text.split(/\r?\n/).find(x=>x.trim())||"");
-  return [",",";","\t","|"].sort((a,b)=>(line.split(b).length-1)-(line.split(a).length-1))[0];
-}
-function inferType(rows, i) {
-  const vals=rows.map(r=>String(r[i]??"").trim()).filter(Boolean);
-  if (!vals.length) return "text";
-  const nums=vals.filter(v=>Number.isFinite(Number(v.replace(/,/g,"")))).length;
-  const dates=vals.filter(v=>!Number.isNaN(Date.parse(v))).length;
-  const unique=new Set(vals).size;
-  if (nums/vals.length > .9) return "number";
-  if (dates/vals.length > .85 && !/(id|code|phone)/i.test(String(i))) return "date";
-  if (unique <= Math.min(50, Math.max(8, vals.length*.25))) return "category";
-  return "text";
-}
+function json(x,status=200){return new Response(JSON.stringify(x),{status,headers:{"content-type":"application/json;charset=UTF-8"}})}

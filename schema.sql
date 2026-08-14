@@ -1,3 +1,5 @@
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE IF NOT EXISTS datasets (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -20,6 +22,7 @@ CREATE TABLE IF NOT EXISTS dataset_columns (
 CREATE TABLE IF NOT EXISTS dataset_rows (
   id TEXT PRIMARY KEY,
   dataset_id TEXT NOT NULL,
+  row_number INTEGER NOT NULL,
   row_json TEXT NOT NULL,
   FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
 );
@@ -27,3 +30,4 @@ CREATE TABLE IF NOT EXISTS dataset_rows (
 CREATE INDEX IF NOT EXISTS idx_datasets_current ON datasets(is_current);
 CREATE INDEX IF NOT EXISTS idx_columns_dataset ON dataset_columns(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_rows_dataset ON dataset_rows(dataset_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_row_number ON dataset_rows(dataset_id,row_number);
